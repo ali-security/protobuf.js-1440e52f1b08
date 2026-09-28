@@ -97,6 +97,13 @@ tape.test("reflected types", function(test) {
         type.add(new protobuf.Field("b", 2, "uint32"));
     }, Error, "should throw when trying to add reserved names");
 
+    test.throws(function() {
+        type.add(new protobuf.Field("$type", 2, "uint32"));
+    }, Error, "should throw when trying to add fields with runtime-reserved names");
+
+    test.throws(function() {
+        type.add(new protobuf.OneOf("$kind", [ "a" ]));
+    }, Error, "should throw when trying to add oneofs with runtime-reserved names");
 
     test.end();
 });
@@ -122,6 +129,31 @@ tape.test("generated message constructors", function(test) {
     test.equal(type.get("__proto__"), null, "should ignore reserved field names");
     type.add(new protobuf.OneOf("__proto__"));
     test.equal(type.get("__proto__"), null, "should ignore reserved oneof names");
+
+    test.throws(function() {
+        protobuf.Root.fromJSON({
+            nested: {
+                TypeShadow: {
+                    fields: {
+                        $type: { type: "string", id: 1 }
+                    }
+                }
+            }
+        });
+    }, /name '\$type' is reserved/, "should reject runtime-reserved field names");
+
+    test.throws(function() {
+        protobuf.Root.fromJSON({
+            nested: {
+                TypeShadow: {
+                    oneofs: {
+                        $type: { oneof: [] }
+                    },
+                    fields: {}
+                }
+            }
+        });
+    }, /name '\$type' is reserved/, "should reject runtime-reserved oneof names");
 
     test.end();
 });

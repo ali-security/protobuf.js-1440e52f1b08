@@ -174,6 +174,39 @@ tape.test("converters", function(test) {
 
         });
 
+        test.test(test.name + " - null-prototype objects", function(test) {
+            var userRoot = protobuf.parse("syntax = \"proto2\"; message User { optional string name = 1; optional int32 age = 2; }").root,
+                User = userRoot.lookupType("User"),
+                user = Object.create(null),
+                oneofRoot = protobuf.parse("syntax = \"proto3\"; message M { oneof kind { string a = 1; int32 b = 2; } }").root,
+                M = oneofRoot.lookupType("M"),
+                oneof = Object.create(null);
+
+            user.name = "attacker";
+            user.age = 99;
+            test.equal(User.verify(user), null, "verify accepts valid null-prototype objects");
+
+            user.age = "bad";
+            test.equal(User.verify(user), "age: integer expected", "verify returns errors for invalid null-prototype objects");
+
+            oneof.a = "x";
+            test.same(M.toObject(oneof, { oneofs: true }), { a: "x", kind: "a" }, "toObject converts null-prototype oneof objects");
+
+            test.end();
+        });
+
+        test.test(test.name + " - runtime-significant field names", function(test) {
+            var root = protobuf.parse("syntax = \"proto2\"; message M { required string hasOwnProperty = 1; }").root;
+            root.resolveAll();
+            var M = root.lookupType("M"),
+                message = M.decode(M.encode({ hasOwnProperty: "x" }).finish());
+
+            test.equal(message.hasOwnProperty, "x", "decode should not call a shadowed hasOwnProperty field");
+            test.equal(M.verify(message), null, "verify should not call a shadowed hasOwnProperty field");
+            test.same(M.toObject(message), { hasOwnProperty: "x" }, "toObject should not call a shadowed hasOwnProperty field");
+            test.end();
+        });
+
         test.test(test.name + " - Message.fromObject", function(test) {
 
             var obj = {
@@ -305,4 +338,20 @@ tape.test("converters", function(test) {
         test.end();
     });
 
+});
+
+tape.test("converters - runtime-significant field names", function(test) {
+    var root = protobuf.parse("syntax = \"proto3\";\n"
+        + "message Singular { string hasOwnProperty = 1; }\n"
+        + "message Repeated { repeated string hasOwnProperty = 1; }\n").root;
+
+    var Singular = root.lookupType("Singular"),
+        Repeated = root.lookupType("Repeated"),
+        singular = Singular.create({ hasOwnProperty: "value" }),
+        repeated = Repeated.decode(Repeated.encode({ hasOwnProperty: [ "a", "b" ] }).finish());
+
+    test.equal(Singular.verify({ hasOwnProperty: "value" }), null, "verify should not call a shadowed hasOwnProperty field");
+    test.same(Singular.toObject(singular), { hasOwnProperty: "value" }, "toObject should not call a shadowed hasOwnProperty field");
+    test.same(repeated.hasOwnProperty, [ "a", "b" ], "decode should not call a shadowed hasOwnProperty field");
+    test.end();
 });
