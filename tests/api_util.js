@@ -108,5 +108,27 @@ tape.test("util", function(test) {
         test.end();
     });
 
+    test.test(test.name + " - utf8", function(test) {
+        test.equal(util.utf8, require("../src/util/utf8"), "should use the bundled utf8 implementation");
+
+        [
+            [0xC0, 0x80],             // U+0000 encoded as two bytes
+            [0xE0, 0x81, 0xBF],       // U+007F encoded as three bytes
+            [0xF0, 0x80, 0x9F, 0xBF], // U+07FF encoded as four bytes
+            [0xF4, 0x90, 0x80, 0x80], // >U+10FFFF encoded as four bytes
+            [0xC0, 0xAF],             // "/" encoded as two bytes
+            [0xE0, 0x80, 0xAF],       // "/" encoded as three bytes
+            [0xF0, 0x80, 0x80, 0xAF]  // "/" encoded as four bytes
+        ].forEach(function(bytes) {
+            var overlong = new Uint8Array(bytes);
+            test.equal(util.utf8.read(overlong, 0, overlong.length), "�", "should decode overlong UTF-8 sequence " + JSON.stringify(bytes) + " as a replacement character");
+        });
+
+        var valid = new Uint8Array([ 0xC2, 0x80, 0xE0, 0xA0, 0x80, 0xF0, 0x90, 0x80, 0x80, 0xF4, 0x8F, 0xBF, 0xBF ]);
+        test.equal(util.utf8.read(valid, 0, valid.length), "\u0080ࠀ𐀀􏿿", "should still decode the shortest-form boundary code points");
+
+        test.end();
+    });
+
     test.end();
 });

@@ -145,6 +145,40 @@ tape.test("writer & reader", function(test) {
       MyMessage.decode(payload);
     }, /maximum nesting depth exceeded/, "limits recursion in reader");
 
+    // overlong UTF-8 in string fields, see also lib_utf8
+
+    test.test(test.name + " - should decode overlong UTF-8 strings as replacement characters", function(test) {
+        var root = protobuf.Root.fromJSON({
+            nested: {
+                Utf8Message: {
+                    fields: {
+                        name: { type: "string", id: 1 }
+                    }
+                }
+            }
+        });
+        var Utf8Message = root.lookupType("Utf8Message");
+
+        [
+            [0xC0, 0xAF],             // "/" encoded as two bytes
+            [0xE0, 0x80, 0xAF],       // "/" encoded as three bytes
+            [0xF0, 0x80, 0x80, 0xAF], // "/" encoded as four bytes
+            [0xC0, 0x80],             // U+0000 encoded as two bytes
+            [0xF4, 0x90, 0x80, 0x80]  // >U+10FFFF encoded as four bytes
+        ].forEach(function(bytes) {
+            // field 1, wire type 2, followed by the length and the raw bytes; a Uint8Array (not a node Buffer)
+            // so that the pure JS utf8 decoder is used rather than node's native utf8Slice
+            var reader = Reader.create(new Uint8Array([ 10, bytes.length ].concat(bytes)));
+            test.notOk(reader instanceof protobuf.BufferReader, "should use a plain Reader for " + JSON.stringify(bytes));
+            test.equal(Utf8Message.decode(reader).name, "�", "should decode " + JSON.stringify(bytes) + " as a replacement character");
+        });
+
+        var valid = Reader.create(new Uint8Array([ 10, 6, 0x2F, 0xC3, 0xA9, 0xE2, 0x82, 0xAC ]));
+        test.equal(Utf8Message.decode(valid).name, "/é€", "should still decode valid UTF-8 strings");
+
+        test.end();
+    });
+
     test.end();
 });
 

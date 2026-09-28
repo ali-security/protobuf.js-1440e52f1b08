@@ -17,7 +17,7 @@ util.float = require("@protobufjs/float");
 util.inquire = require("@protobufjs/inquire");
 
 // converts to / from utf8 encoded strings
-util.utf8 = require("@protobufjs/utf8");
+util.utf8 = require("./utf8");
 
 // provides a node-like buffer pool in the browser
 util.pool = require("@protobufjs/pool");

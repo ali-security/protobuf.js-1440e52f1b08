@@ -1,18 +1,13 @@
 "use strict";
 
-/**
- * A minimal UTF8 implementation for number arrays.
- * @memberof util
- * @namespace
- */
+// A minimal UTF8 implementation for number arrays.
+// Mirrors lib/utf8, which remains the documented util.utf8 namespace.
 var utf8 = exports,
-    replacementChar = "\ufffd";
+    replacementChar = "�";
 
-/**
- * Calculates the UTF8 byte length of a string.
- * @param {string} string String
- * @returns {number} Byte length
- */
+// Calculates the UTF8 byte length of a string.
+// string: String
+// returns: Byte length
 utf8.length = function utf8_length(string) {
     var len = 0,
         c = 0;
@@ -31,13 +26,11 @@ utf8.length = function utf8_length(string) {
     return len;
 };
 
-/**
- * Reads UTF8 bytes as a string.
- * @param {Uint8Array} buffer Source buffer
- * @param {number} start Source start
- * @param {number} end Source end
- * @returns {string} String read
- */
+// Reads UTF8 bytes as a string.
+// buffer: Source buffer (Uint8Array)
+// start: Source start
+// end: Source end
+// returns: String read
 utf8.read = function utf8_read(buffer, start, end) {
     if (end - start < 1) {
         return "";
@@ -69,13 +62,11 @@ utf8.read = function utf8_read(buffer, start, end) {
     return str;
 };
 
-/**
- * Writes a string as UTF8 bytes.
- * @param {string} string Source string
- * @param {Uint8Array} buffer Destination buffer
- * @param {number} offset Destination offset
- * @returns {number} Bytes written
- */
+// Writes a string as UTF8 bytes.
+// string: Source string
+// buffer: Destination buffer (Uint8Array)
+// offset: Destination offset
+// returns: Bytes written
 utf8.write = function utf8_write(string, buffer, offset) {
     var start = offset,
         c1, // character 1
