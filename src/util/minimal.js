@@ -245,6 +245,13 @@ function merge(dst, src, ifNotSet) { // used by converters
 util.merge = merge;
 
 /**
+ * Recursion limit.
+ * @memberof util
+ * @type {number}
+ */
+util.recursionLimit = 100;
+
+/**
  * Makes a property safe for assignment as an own property.
  * @memberof util
  * @param {Object.<string,*>} obj Object
