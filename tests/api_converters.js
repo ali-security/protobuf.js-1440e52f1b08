@@ -207,6 +207,90 @@ tape.test("converters", function(test) {
             test.end();
         });
 
+        test.test(test.name + " - Type.toObject recursion limit", function(test) {
+            var recursionLimit = protobuf.util.recursionLimit;
+            protobuf.util.recursionLimit = 3;
+            try {
+                var nestedRoot = protobuf.Root.fromJSON({
+                    nested: {
+                        Recursive: {
+                            fields: {
+                                next: {
+                                    type: "Recursive",
+                                    id: 1
+                                }
+                            }
+                        }
+                    }
+                });
+                var Recursive = nestedRoot.lookupType("Recursive");
+                var msg = Recursive.create();
+                var cursor = msg;
+                for (var i = 0; i < 5; ++i)
+                    cursor = cursor.next = Recursive.create();
+
+                test.throws(function() {
+                    Recursive.toObject(msg);
+                }, /max depth exceeded/, "should reject excessive object conversion depth");
+            } finally {
+                protobuf.util.recursionLimit = recursionLimit;
+            }
+
+            test.end();
+        });
+
+        test.test(test.name + " - Type.toObject deeply nested with default limits", function(test) {
+            // A message with deeply nested submessages must not be able to exhaust
+            // the call stack while being converted to a plain object or JSON.
+            var nestedRoot = protobuf.Root.fromJSON({
+                nested: {
+                    Recursive: {
+                        fields: {
+                            next: {
+                                type: "Recursive",
+                                id: 1
+                            },
+                            value: {
+                                type: "int32",
+                                id: 2
+                            }
+                        }
+                    }
+                }
+            });
+            var Recursive = nestedRoot.lookupType("Recursive");
+
+            function nested(depth) {
+                var head = Recursive.create({ value: 1 });
+                var cursor = head;
+                for (var i = 0; i < depth; ++i)
+                    cursor = cursor.next = Recursive.create({ value: i });
+                return head;
+            }
+
+            test.equal(protobuf.util.recursionLimit, 100, "should use the default recursion limit");
+
+            var shallow = Recursive.toObject(nested(50));
+            test.equal(shallow.value, 1, "should still convert messages nested below the limit");
+            test.equal(JSON.stringify(nested(50)).length > 0, true, "should still serialize messages nested below the limit to JSON");
+
+            var msg = nested(500);
+            test.throws(function() {
+                Recursive.toObject(msg);
+            }, /max depth exceeded/, "should reject deeply nested messages via Type.toObject");
+            test.throws(function() {
+                Recursive.toObject(msg, protobuf.util.toJSONOptions);
+            }, /max depth exceeded/, "should reject deeply nested messages via Type.toObject with json options");
+            test.throws(function() {
+                msg.toJSON();
+            }, /max depth exceeded/, "should reject deeply nested messages via Message#toJSON");
+            test.throws(function() {
+                JSON.stringify(msg);
+            }, /max depth exceeded/, "should reject deeply nested messages via JSON.stringify");
+
+            test.end();
+        });
+
         test.test(test.name + " - Message#toJSON", function(test) {
             var msg = Message.create();
             msg.$type = {
