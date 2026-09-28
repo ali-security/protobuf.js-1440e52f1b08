@@ -216,3 +216,64 @@ tape.test("feature resolution edition 2023", function(test) {
 
     test.end();
 });
+
+tape.test("type names are sanitized before code generation", function(test) {
+    var FLAG = "__protobufjs_type_name_injection";
+    // closes the generated function header, runs an expression via the comma operator, then re-opens a function
+    var NAME = "Evil(){}, global." + FLAG + " = true, function Evil";
+    var FILTERED = "Evilglobal__protobufjs_type_name_injectiontruefunctionEvil";
+
+    delete global[FLAG];
+
+    // the payload is live when it reaches codegen unfiltered
+    var injected = protobuf.util.codegen(["p"], NAME)("return p")();
+    test.equal(global[FLAG], true, "should execute the payload when passed to codegen unfiltered");
+    test.equal(injected(42), 42, "should still yield a working function when passed to codegen unfiltered");
+    delete global[FLAG];
+
+    try {
+        var type = new protobuf.Type(NAME);
+        test.equal(type.name, FILTERED, "should remove invalid characters from the type name");
+        test.ok(/^\w+$/.test(type.name), "should only keep word characters in the type name");
+
+        type.add(new protobuf.Field("a", 1, "uint32"));
+        var root = new protobuf.Root();
+        root.add(type);
+
+        var ctor = type.ctor;
+        test.equal(global[FLAG], undefined, "should not execute the payload when generating the constructor");
+        test.equal(typeof ctor, "function", "should still generate a constructor");
+
+        var message = type.create({ a: 1 });
+        test.ok(message instanceof ctor, "should create instances of the generated constructor");
+        test.equal(type.decode(type.encode(message).finish()).a, 1, "should still encode and decode");
+        test.equal(type.verify({ a: 1 }), null, "should still verify");
+        test.same(type.toObject(type.fromObject({ a: 2 })), { a: 2 }, "should still convert from and to objects");
+        test.equal(global[FLAG], undefined, "should not execute the payload when generating encode, decode, verify, fromObject and toObject");
+
+        var nested = {};
+        nested[NAME] = {
+            fields: {
+                a: {
+                    type: "uint32",
+                    id: 1
+                }
+            }
+        };
+        var jsonRoot = protobuf.Root.fromJSON({ nested: nested });
+        var jsonType = jsonRoot.nestedArray[0];
+        test.equal(jsonType.name, FILTERED, "should remove invalid characters from type names in JSON descriptors");
+        test.equal(jsonRoot.lookupType(FILTERED), jsonType, "should register the type under its filtered name");
+        test.equal(jsonType.decode(jsonType.encode({ a: 7 }).finish()).a, 7, "should still encode and decode types from JSON descriptors");
+        test.equal(jsonType.verify({ a: 7 }), null, "should still verify types from JSON descriptors");
+        test.same(jsonType.toObject(jsonType.fromObject({ a: 3 })), { a: 3 }, "should still convert types from JSON descriptors");
+        test.equal(typeof jsonType.ctor, "function", "should still generate a constructor for types from JSON descriptors");
+        test.equal(global[FLAG], undefined, "should not execute the payload from a JSON descriptor");
+
+        test.equal(new protobuf.Type("Valid_Name1").name, "Valid_Name1", "should keep valid type names untouched");
+    } finally {
+        delete global[FLAG];
+    }
+
+    test.end();
+});
