@@ -162,5 +162,47 @@ tape.test("Options", function (test) {
         test.end();
     });
 
+    test.test(test.name + " - reserved aggregate option keys", function(test) {
+        var parsed = protobuf.parse(
+            "syntax = \"proto2\";" +
+            "message Test {" +
+            "  optional string value = 1 [(foo) = { __proto__: \"x\" regular: \"y\" }];" +
+            "}"
+        );
+        var field = parsed.root.lookupType("Test").fields.value;
+        var option = field.parsedOptions[0]["(foo)"];
+
+        test.equal(Object.getPrototypeOf(option), Object.prototype, "should keep the aggregate option object shape");
+        test.notOk(Object.prototype.hasOwnProperty.call(option, "__proto__"), "should ignore reserved aggregate option keys");
+        test.equal(option.regular, "y", "should keep regular aggregate option keys");
+        test.equal(Object.getPrototypeOf(field.options), Object.prototype, "should keep the flat options prototype");
+        test.equal(field.options["(foo).regular"], "y", "should keep regular flat option keys");
+        test.equal(field.options["(foo).__proto__"], "x", "should keep extension option keys as literals");
+        test.end();
+    });
+
+    test.test(test.name + " - inherited option paths", function(test) {
+        var objectKeys = Object.keys,
+            keysAfter,
+            error = null;
+        try {
+            protobuf.parse(
+                "syntax = \"proto2\";" +
+                "message Test {" +
+                "  option (bar).constructor.keys = \"y\";" +
+                "  optional string value = 1 [(foo).constructor.keys = \"x\"];" +
+                "}"
+            );
+        } catch (err) {
+            error = err;
+        } finally {
+            keysAfter = Object.keys;
+            Object.keys = objectKeys;
+        }
+        test.equal(error, null, "should parse schemas with inherited option paths");
+        test.equal(keysAfter, objectKeys, "should not overwrite Object constructor properties");
+        test.end();
+    });
+
     test.end();
 });

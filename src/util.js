@@ -15,6 +15,8 @@ util.codegen = require("@protobufjs/codegen");
 util.fetch   = require("@protobufjs/fetch");
 util.path    = require("@protobufjs/path");
 
+var unsafePropertyRe = /^(?:__proto__|prototype|constructor)$/;
+
 /**
  * Node's fs module if available.
  * @type {Object.<string,*>}
@@ -177,9 +179,8 @@ util.decorateEnum = function decorateEnum(object) {
 util.setProperty = function setProperty(dst, path, value, ifNotSet) {
     function setProp(dst, path, value) {
         var part = path.shift();
-        if (part === "__proto__" || part === "prototype") {
-          return dst;
-        }
+        if (unsafePropertyRe.test(part))
+            return dst;
         if (path.length > 0) {
             dst[part] = setProp(dst[part] || {}, path, value);
         } else {
