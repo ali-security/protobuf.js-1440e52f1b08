@@ -1,26 +1,36 @@
 name: "Test"
 on:
-  push:
-    branches:
-    - master
-  pull_request:
-    types: [assigned, opened, synchronize, reopened, labeled]
+  workflow_dispatch:
+    inputs:
+      test-filter:
+        description: "Optional tape test file(s)/glob(s) to run instead of the full test:sources suite (empty = full suite)"
+        required: false
+        type: string
+        default: ""
 jobs:
   lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
     - uses: actions/checkout@v1
     - uses: actions/setup-node@v1
       with:
         node-version: "12"
+    - name: "Pin registry time machine"
+      run: |
+        npm config set registry https://time-machines-npm.sealsecurity.io/
+        npm config set //time-machines-npm.sealsecurity.io/:_authToken=2025-12-16T22:00:11.067000Z
     - name: "Install dependencies"
-      run: npm install
+      run: |
+        npm install
+        rm -rf node_modules/@types/markdown-it
     - name: "Lint sources"
       run: npm run lint:sources -- --max-warnings 0
     - name: "Lint types"
       run: npm run lint:types
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       matrix:
         node_version: ["12", "14", "16", "18"]
@@ -29,20 +39,63 @@ jobs:
     - uses: actions/setup-node@v1
       with:
         node-version: ${{ matrix.node_version }}
+    - name: "Pin registry time machine"
+      run: |
+        npm config set registry https://time-machines-npm.sealsecurity.io/
+        npm config set //time-machines-npm.sealsecurity.io/:_authToken=2025-12-16T22:00:11.067000Z
     - name: "Install dependencies"
-      run: npm install
+      run: |
+        npm install
+        rm -rf node_modules/@types/markdown-it
     - name: "Test sources"
-      run: npm run test:sources
+      run: |
+        if [ -n "${{ inputs.test-filter }}" ]; then
+          npx tape -r ./lib/tape-adapter ${{ inputs.test-filter }}
+        else
+          npm run test:sources
+        fi
     - name: "Test types"
       run: npm run test:types
   bench:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
     - uses: actions/checkout@v1
     - uses: actions/setup-node@v1
       with:
         node-version: "12"
+    - name: "Pin registry time machine"
+      run: |
+        npm config set registry https://time-machines-npm.sealsecurity.io/
+        npm config set //time-machines-npm.sealsecurity.io/:_authToken=2025-12-16T22:00:11.067000Z
     - name: "Install dependencies"
       run: npm install
     - name: "Run benchmark"
       run: npm run bench
+  pack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: "20.18.1"
+    - name: "Pin registry time machine"
+      run: |
+        npm config set registry https://time-machines-npm.sealsecurity.io/
+        npm config set //time-machines-npm.sealsecurity.io/:_authToken=2025-12-16T22:00:11.067000Z
+    - name: "Install dependencies"
+      run: npm install
+    - name: "Install cli dependencies"
+      run: npm install --prefix cli
+    - name: "Build"
+      run: npm run build
+    - name: "Pack"
+      run: npm pack --ignore-scripts
+    - name: "List tarball"
+      run: ls -la protobufjs-*.tgz && tar tzf protobufjs-*.tgz
+    - uses: actions/upload-artifact@v4
+      with:
+        name: protobufjs-tgz
+        path: protobufjs-*.tgz
+        if-no-files-found: error
