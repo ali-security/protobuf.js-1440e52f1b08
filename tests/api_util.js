@@ -120,6 +120,67 @@ tape.test("util", function(test) {
         test.end();
     });
 
+    test.test(test.name + " - safeProp", function(test) {
+        test.equal(util.safeProp("validName"), ".validName", "should use dot notation for simple names");
+        test.equal(util.safeProp("bad\nfield").indexOf("\n"), -1, "should escape line feeds");
+        test.equal(util.safeProp("bad\rfield").indexOf("\r"), -1, "should escape carriage returns");
+        test.equal(util.safeProp("bad\u0000field").indexOf("\u0000"), -1, "should escape null bytes");
+
+        var root = protobuf.Root.fromJSON({
+            nested: {
+                Message: {
+                    fields: {
+                        "bad\nfield": { type: "string", id: 1 }
+                    }
+                }
+            }
+        });
+        var Message = root.lookupType("Message");
+        var msg = Message.create({ "bad\nfield": "ok" });
+        test.same(Message.toObject(msg), { "bad\nfield": "ok" }, "should generate usable accessors");
+
+        var oneofRoot = protobuf.Root.fromJSON({
+            nested: {
+                Message: {
+                    oneofs: {
+                        "bad\roneof": { oneof: ["bad\nfield", "bad\u2028other"] }
+                    },
+                    fields: {
+                        "bad\nfield": { type: "string", id: 1 },
+                        "bad\u2028other": { type: "int32", id: 2 },
+                        "bad\r\nlist": { rule: "repeated", type: "int32", id: 3 },
+                        "bad\nmap": { keyType: "string", type: "int32", id: 4 },
+                        "bad\rplain": { type: "string", id: 5 }
+                    }
+                }
+            }
+        });
+        var OneofMessage = oneofRoot.lookupType("Message");
+        var object = {
+            "bad\nfield": "ok",
+            "bad\r\nlist": [1, 2],
+            "bad\nmap": { a: 1 },
+            "bad\rplain": "plain"
+        };
+        test.equal(OneofMessage.verify(object), null, "should generate a usable verifier for control character names");
+        var created = OneofMessage.fromObject(object);
+        var decoded = OneofMessage.decode(OneofMessage.encode(created).finish());
+        test.same(OneofMessage.toObject(decoded, { oneofs: true }), {
+            "bad\nfield": "ok",
+            "bad\roneof": "bad\nfield",
+            "bad\r\nlist": [1, 2],
+            "bad\nmap": { a: 1 },
+            "bad\rplain": "plain"
+        }, "should generate usable encoders, decoders and converters for control character field and oneof names");
+        test.same(OneofMessage.toObject(new OneofMessage.ctor(), { defaults: true }), {
+            "bad\r\nlist": [],
+            "bad\nmap": {},
+            "bad\rplain": ""
+        }, "should generate usable constructors and defaults for control character names");
+
+        test.end();
+    });
+
     test.test(test.name + " - type lookups", function(test) {
         test.equal(Object.getPrototypeOf(protobuf.types.basic), null, "should not inherit basic type lookups");
         test.equal(Object.getPrototypeOf(protobuf.types.defaults), null, "should not inherit default value lookups");
